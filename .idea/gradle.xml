@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="GradleSettings">
+    <option name="linkedExternalProjectsSettings">
+      <GradleProjectSettings>
+        <option name="externalProjectPath" value="$PROJECT_DIR$/instakill-987b9ea29e93ef4d545c4d7964a266e82c103f99/instakill-987b9ea29e93ef4d545c4d7964a266e82c103f99/backend" />
+        <option name="gradleJvm" value="corretto-23" />
+        <option name="modules">
+          <set>
+            <option value="$PROJECT_DIR$/instakill-987b9ea29e93ef4d545c4d7964a266e82c103f99/instakill-987b9ea29e93ef4d545c4d7964a266e82c103f99/backend" />
+          </set>
+        </option>
+      </GradleProjectSettings>
+    </option>
+  </component>
+</project>
