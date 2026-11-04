@@ -27,7 +27,7 @@
       <section v-else class="feed">
         <form @submit.prevent="createNewPost" class="card form composer">
           <textarea v-model="composer.content" rows="3" placeholder="Share something..." required></textarea>
-          <input v-model="composer.imageUrl" placeholder="Image URL (optional)">
+          <input type="file" @change="incarcaFisier" accept="image/*,video/*" />
           <div class="actions">
             <button type="submit">Post</button>
           </div>
@@ -54,7 +54,8 @@
             </div>
           </header>
           <p>{{ post.content }}</p>
-          <img v-if="post.imageUrl" :src="post.imageUrl" alt="post image">
+          <video v-if="post.imageUrl && post.imageUrl.endsWith('.mp4')" :src="post.imageUrl" controls style="max-width: 100%; border-radius: 8px; margin-top: 10px;"></video>
+          <img v-else-if="post.imageUrl" :src="post.imageUrl" alt="post image" style="max-width: 100%; border-radius: 8px; margin-top: 10px;">
           
           <!-- Comments Section -->
           <section class="comments">
@@ -187,6 +188,24 @@ async function createNewPost() {
   composer.imageUrl = ''
   await loadFeed()
 }
+
+const incarcaFisier = async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch('/api/media', {
+    method: 'POST',
+    body: formData
+  });
+
+  if (response.ok) {
+    const result = await response.json();
+    composer.imageUrl = result.mediaUrl; // Salvăm link-ul direct în structura "composer" din Vue
+  }
+};
 
 async function togglePostLike(post) {
   const result = await toggleLike(post.id)

@@ -10,13 +10,41 @@
                 <textarea th:field="*{content}" rows="4"></textarea>
             </label>
             <div class="error" th:if="${#fields.hasErrors('content')}" th:errors="*{content}"></div>
-            <label>Image URL
-                <input type="text" th:field="*{imageUrl}" placeholder="https://..."/>
+            <label>Alege o poză sau un video:
+                <input type="file" id="mediaFileInput" accept="image/*,video/*" />
             </label>
-            <div class="error" th:if="${#fields.hasErrors('imageUrl')}" th:errors="*{imageUrl}"></div>
-            <button type="submit">Publish</button>
+            <!-- Câmpul original este acum ascuns și va prelua automat link-ul de la server -->
+            <input type="hidden" id="imageUrlInput" th:field="*{imageUrl}" />
         </form>
     </section>
+    <script>
+        document.querySelector('.form').addEventListener('submit', async function(e) {
+            e.preventDefault(); // Oprim trimiterea temporar
+
+            const fileInput = document.getElementById('mediaFileInput');
+            const imageUrlInput = document.getElementById('imageUrlInput');
+            const file = fileInput.files[0];
+
+            if (file) {
+                const formData = new FormData();
+                formData.append("file", file);
+
+                // Trimitem fișierul către MediaController-ul tău
+                const response = await fetch('/api/media', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    imageUrlInput.value = result.mediaUrl; // Salvăm link-ul returnat
+                }
+            }
+
+            // Trimitem postarea completă mai departe
+            this.submit();
+        });
+    </script>
 </div>
 </body>
 </html>

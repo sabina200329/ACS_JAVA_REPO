@@ -9,6 +9,9 @@ spring:
     open-in-view: false
 server:
   servlet:
+    multipart:
+      max-file-size: 200MB
+      max-request-size: 200MB
     context-path: /
 springdoc:
   api-docs:
@@ -28,3 +31,9 @@ instakill:
 logging:
   level:
     org.hibernate.SQL: warn
+
+media:
+  base-path: media
+
+
+
