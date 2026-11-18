@@ -11,6 +11,16 @@
             </label>
             <div class="error" th:if="${#fields.hasErrors('content')}" th:errors="*{content}"></div>
 
+            <!-- Lab 7: rescriere amuzantă cu LLM-ul local -->
+            <div class="funny-row">
+                <button type="button" id="funnyButton" class="funny-button">
+                    <span class="spinner" aria-hidden="true"></span>
+                    <span class="funny-label">😄 Make It Funnier</span>
+                </button>
+                <button type="button" id="undoFunnyButton" class="link-button" hidden>Undo</button>
+                <small id="funnyStatus" class="funny-status" role="status"></small>
+            </div>
+
             <label>Upload a photo or video
                 <input type="file" id="mediaFileInput" accept="image/*,video/mp4,video/quicktime,video/webm"/>
             </label>
@@ -24,7 +34,73 @@
             <button type="submit" id="publishButton">Publish</button>
         </form>
 
+        <div id="funnyToast" class="toast" role="status" hidden>Your post just got funnier 😄</div>
+
         <script>
+            // Lab 7: butonul „Make It Funnier” -> POST /api/funnyfy
+            (function () {
+                const textarea = document.getElementById('content');
+                const button = document.getElementById('funnyButton');
+                const undo = document.getElementById('undoFunnyButton');
+                const status = document.getElementById('funnyStatus');
+                const toast = document.getElementById('funnyToast');
+                let previousText = null;
+                let toastTimer = null;
+
+                function setLoading(loading) {
+                    button.disabled = loading;
+                    button.classList.toggle('loading', loading);
+                    button.querySelector('.funny-label').textContent = loading ? 'Making it funnier…' : '😄 Make It Funnier';
+                }
+
+                function showToast() {
+                    toast.hidden = false;
+                    clearTimeout(toastTimer);
+                    toastTimer = setTimeout(() => { toast.hidden = true; }, 3000);
+                }
+
+                button.addEventListener('click', async function () {
+                    const text = textarea.value.trim();
+                    status.className = 'funny-status';
+                    if (!text) {
+                        status.textContent = 'Write something first 🙂';
+                        return;
+                    }
+                    setLoading(true);
+                    status.textContent = '';
+                    try {
+                        const response = await fetch('/api/funnyfy', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ text }),
+                            credentials: 'same-origin'
+                        });
+                        const body = await response.json().catch(() => ({}));
+                        if (!response.ok) {
+                            throw new Error(body.detail || ('Request failed (' + response.status + ')'));
+                        }
+                        previousText = textarea.value;
+                        textarea.value = body.text;
+                        undo.hidden = false;
+                        showToast();
+                    } catch (err) {
+                        status.textContent = 'Could not make it funnier: ' + err.message;
+                        status.className = 'funny-status error';
+                    } finally {
+                        setLoading(false);
+                    }
+                });
+
+                undo.addEventListener('click', function () {
+                    if (previousText !== null) {
+                        textarea.value = previousText;
+                        previousText = null;
+                    }
+                    undo.hidden = true;
+                    status.textContent = '';
+                });
+            })();
+
             (function () {
                 const form = document.getElementById('postForm');
                 const fileInput = document.getElementById('mediaFileInput');

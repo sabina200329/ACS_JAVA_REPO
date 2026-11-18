@@ -1,0 +1,29 @@
+{
+  "id": "chatcmpl-sprvapngl8axy78mig7e3",
+  "object": "chat.completion",
+  "created": 1795020946,
+  "model": "google/gemma-3-270m",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Alright, buckle up because you're about to embark on an epic journey of discovery! 🚀 We've got some exciting projects to hit, and we're ready to explore everything that comes with coding. Let's get started! 💻\n",
+        "reasoning_content": "",
+        "tool_calls": []
+      },
+      "logprobs": null,
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 40,
+    "completion_tokens": 53,
+    "total_tokens": 93,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  },
+  "stats": {},
+  "system_fingerprint": "google/gemma-3-270m"
+}

@@ -26,6 +26,10 @@ export function uploadMedia(file) {
   return client.post('/api/media', formData).then(res => res.data)
 }
 
+export function funnyfy(text) {
+  return client.post('/api/funnyfy', { text }).then(res => res.data)
+}
+
 export function fetchMyAnalytics() {
   return client.get('/api/analytics/me').then(res => res.data)
 }

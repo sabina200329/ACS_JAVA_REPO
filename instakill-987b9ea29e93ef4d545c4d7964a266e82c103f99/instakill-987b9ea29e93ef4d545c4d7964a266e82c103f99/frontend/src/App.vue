@@ -88,6 +88,14 @@
       <section v-else class="feed">
         <form @submit.prevent="createNewPost" class="card form composer">
           <textarea v-model="composer.content" rows="3" placeholder="Share something..." required></textarea>
+          <div class="funny-row">
+            <button type="button" class="funny-button" :disabled="funny.loading" @click="makeFunnier">
+              <span v-if="funny.loading" class="spinner" aria-hidden="true"></span>
+              {{ funny.loading ? 'Making it funnier…' : '😄 Make It Funnier' }}
+            </button>
+            <button v-if="funny.previous !== null" type="button" class="link-button" @click="undoFunnier">Undo</button>
+            <small v-if="funny.error" class="error">{{ funny.error }}</small>
+          </div>
           <input ref="fileInput" type="file" @change="incarcaFisier" accept="image/*,video/mp4,video/quicktime,video/webm" />
           <input v-model="composer.imageUrl" type="text" placeholder="...sau lipește un URL de imagine/video" />
           <small v-if="uploadStatus">{{ uploadStatus }}</small>
@@ -151,12 +159,13 @@
         </article>
       </section>
     </main>
+    <div v-if="funny.toast" class="toast" role="status">Your post just got funnier 😄</div>
   </div>
 </template>
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
-import { createPost, fetchMe, listFeed, login, register as registerUser, toggleLike, listComments, addComment, uploadMedia, fetchMyAnalytics } from './api'
+import { createPost, fetchMe, listFeed, login, register as registerUser, toggleLike, listComments, addComment, uploadMedia, fetchMyAnalytics, funnyfy } from './api'
 
 const user = ref(null)
 const posts = ref([])
@@ -169,6 +178,8 @@ const uploading = ref(false)
 const uploadStatus = ref('')
 const fileInput = ref(null)
 const view = ref('feed')
+const funny = reactive({ loading: false, previous: null, error: '', toast: false })
+let funnyToastTimer = null
 const analytics = ref(null)
 
 // Comments state
@@ -274,6 +285,36 @@ async function incarcaFisier(event) {
     uploadStatus.value = err.response?.data?.detail || 'Upload eșuat'
   } finally {
     uploading.value = false
+  }
+}
+
+// Lab 7: rescriere amuzantă cu LLM-ul local (POST /api/funnyfy)
+async function makeFunnier() {
+  const text = composer.content.trim()
+  funny.error = ''
+  if (!text) {
+    funny.error = 'Write something first 🙂'
+    return
+  }
+  funny.loading = true
+  try {
+    const result = await funnyfy(text)
+    funny.previous = composer.content
+    composer.content = result.text
+    funny.toast = true
+    clearTimeout(funnyToastTimer)
+    funnyToastTimer = setTimeout(() => { funny.toast = false }, 3000)
+  } catch (err) {
+    funny.error = 'Could not make it funnier: ' + (err.response?.data?.detail || err.message)
+  } finally {
+    funny.loading = false
+  }
+}
+
+function undoFunnier() {
+  if (funny.previous !== null) {
+    composer.content = funny.previous
+    funny.previous = null
   }
 }
 

@@ -198,3 +198,71 @@ body {
     padding: 0.4rem 0.5rem;
     border-bottom: 1px solid #e5e7eb;
 }
+
+/* Lab 7: Make It Funnier */
+.funny-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.form .funny-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: #7c3aed;
+}
+
+.form .funny-button:disabled {
+    opacity: 0.7;
+    cursor: wait;
+}
+
+.funny-button .spinner {
+    display: none;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: funny-spin 0.8s linear infinite;
+}
+
+.funny-button.loading .spinner {
+    display: inline-block;
+}
+
+@keyframes funny-spin {
+    to { transform: rotate(360deg); }
+}
+
+.form .link-button {
+    background: none;
+    color: #2563eb;
+    padding: 0;
+    text-decoration: underline;
+}
+
+.funny-status {
+    color: #6b7280;
+}
+
+.funny-status.error {
+    color: #ef4444;
+}
+
+.toast {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    background: #111827;
+    color: #fff;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.toast[hidden] {
+    display: none;
+}
