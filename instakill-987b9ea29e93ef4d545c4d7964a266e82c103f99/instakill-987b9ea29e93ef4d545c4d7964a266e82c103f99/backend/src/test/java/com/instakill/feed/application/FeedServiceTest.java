@@ -1,5 +1,6 @@
 package com.instakill.feed.application;
 
+import com.instakill.feed.domain.FeedRankingStrategy;
 import com.instakill.feed.domain.FeedSort;
 import com.instakill.post.domain.Post;
 import com.instakill.post.domain.PostRepository;
@@ -11,6 +12,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.Mockito.when;
 
@@ -66,6 +68,36 @@ class FeedServiceTest {
 
         assertThat(result).hasSize(1);
         assertThat(result).isEqualTo(posts);
+    }
+
+    @Test
+    void usesWhateverStrategyIsRegisteredWithoutChangingFeedService() {
+        // O strategie nouă, definită doar aici: FeedService o folosește fără nicio modificare.
+        List<Post> custom = List.of(post(Instant.now(), 42, 0));
+        FeedRankingStrategy customStrategy = new FeedRankingStrategy() {
+            @Override
+            public FeedSort sort() {
+                return FeedSort.TRENDING;
+            }
+
+            @Override
+            public List<Post> fetch(PostRepository repo, int page, int size) {
+                return custom;
+            }
+        };
+        FeedService customService = new FeedService(repository,
+                List.of(new com.instakill.feed.domain.NewestFeedRankingStrategy(), customStrategy));
+
+        assertThat(customService.listFeed(FeedSort.TRENDING, 0, 10)).isSameAs(custom);
+    }
+
+    @Test
+    void rejectsSortWithoutRegisteredStrategy() {
+        FeedService onlyNewest = new FeedService(repository,
+                List.of(new com.instakill.feed.domain.NewestFeedRankingStrategy()));
+
+        assertThatThrownBy(() -> onlyNewest.listFeed(FeedSort.TRENDING, 0, 10))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     private Post post(Instant createdAt, long likes, long comments) {
