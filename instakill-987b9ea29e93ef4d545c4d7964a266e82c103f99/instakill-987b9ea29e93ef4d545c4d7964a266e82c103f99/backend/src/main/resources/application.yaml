@@ -7,11 +7,12 @@ spring:
     hibernate:
       ddl-auto: update
     open-in-view: false
-server:
   servlet:
     multipart:
       max-file-size: 200MB
       max-request-size: 200MB
+server:
+  servlet:
     context-path: /
 springdoc:
   api-docs:
@@ -28,12 +29,12 @@ instakill:
     secret: change-me-change-me-change-me-change-me-change-me-secret-key-1234
     issuer: instakill
     ttl-minutes: 120
+  notifications:
+    enabled: true
+    topic-url: https://ntfy.sh/instakill_sabina_demo
 logging:
   level:
     org.hibernate.SQL: warn
 
 media:
   base-path: media
-
-
-

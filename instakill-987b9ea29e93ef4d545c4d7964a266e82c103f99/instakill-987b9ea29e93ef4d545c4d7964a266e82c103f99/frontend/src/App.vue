@@ -27,9 +27,11 @@
       <section v-else class="feed">
         <form @submit.prevent="createNewPost" class="card form composer">
           <textarea v-model="composer.content" rows="3" placeholder="Share something..." required></textarea>
-          <input type="file" @change="incarcaFisier" accept="image/*,video/*" />
+          <input ref="fileInput" type="file" @change="incarcaFisier" accept="image/*,video/mp4,video/quicktime,video/webm" />
+          <input v-model="composer.imageUrl" type="text" placeholder="...sau lipește un URL de imagine/video" />
+          <small v-if="uploadStatus">{{ uploadStatus }}</small>
           <div class="actions">
-            <button type="submit">Post</button>
+            <button type="submit" :disabled="uploading">Post</button>
           </div>
         </form>
 
@@ -54,7 +56,7 @@
             </div>
           </header>
           <p>{{ post.content }}</p>
-          <video v-if="post.imageUrl && post.imageUrl.endsWith('.mp4')" :src="post.imageUrl" controls style="max-width: 100%; border-radius: 8px; margin-top: 10px;"></video>
+          <video v-if="isVideo(post.imageUrl)" :src="post.imageUrl" controls style="max-width: 100%; border-radius: 8px; margin-top: 10px;"></video>
           <img v-else-if="post.imageUrl" :src="post.imageUrl" alt="post image" style="max-width: 100%; border-radius: 8px; margin-top: 10px;">
           
           <!-- Comments Section -->
@@ -93,7 +95,7 @@
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
-import { createPost, fetchMe, listFeed, login, register as registerUser, toggleLike, listComments, addComment } from './api'
+import { createPost, fetchMe, listFeed, login, register as registerUser, toggleLike, listComments, addComment, uploadMedia } from './api'
 
 const user = ref(null)
 const posts = ref([])
@@ -102,6 +104,9 @@ const authMode = ref('login')
 const error = ref('')
 const authForm = reactive({ username: '', email: '', password: '', usernameOrEmail: '' })
 const composer = reactive({ content: '', imageUrl: '' })
+const uploading = ref(false)
+const uploadStatus = ref('')
+const fileInput = ref(null)
 
 // Comments state
 const comments = reactive({})
@@ -182,30 +187,36 @@ async function submitComment(postId) {
 }
 
 async function createNewPost() {
-  if (!composer.content.trim()) return
-  await createPost({ content: composer.content, imageUrl: composer.imageUrl || null })
+  if (!composer.content.trim() || uploading.value) return
+  await createPost({ content: composer.content, imageUrl: composer.imageUrl.trim() || null })
   composer.content = ''
   composer.imageUrl = ''
+  uploadStatus.value = ''
+  if (fileInput.value) fileInput.value.value = ''
   await loadFeed()
 }
 
-const incarcaFisier = async (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
+async function incarcaFisier(event) {
+  const file = event.target.files[0]
+  if (!file) return
 
-  const formData = new FormData();
-  formData.append("file", file);
-
-  const response = await fetch('/api/media', {
-    method: 'POST',
-    body: formData
-  });
-
-  if (response.ok) {
-    const result = await response.json();
-    composer.imageUrl = result.mediaUrl; // Salvăm link-ul direct în structura "composer" din Vue
+  uploading.value = true
+  uploadStatus.value = `Se încarcă ${file.name}...`
+  try {
+    const result = await uploadMedia(file)
+    composer.imageUrl = result.mediaUrl
+    uploadStatus.value = 'Fișier încărcat ✔'
+  } catch (err) {
+    composer.imageUrl = ''
+    uploadStatus.value = err.response?.data?.detail || 'Upload eșuat'
+  } finally {
+    uploading.value = false
   }
-};
+}
+
+function isVideo(url) {
+  return /\.(mp4|mov|webm)(\?.*)?$/i.test(url || '')
+}
 
 async function togglePostLike(post) {
   const result = await toggleLike(post.id)

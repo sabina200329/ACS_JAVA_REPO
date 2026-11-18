@@ -1,5 +1,6 @@
 package com.instakill.post.api.rest;
 
+import com.instakill.media.MediaTypes;
 import com.instakill.user.api.rest.UserResponse;
 
 import java.time.Instant;
@@ -17,4 +18,8 @@ public record PostResponse(
         boolean likedByCurrentUser,
         UserResponse author
 ) {
+    /** True dacă media atașată este video (folosit în template-uri). */
+    public boolean video() {
+        return MediaTypes.isVideo(imageUrl);
+    }
 }

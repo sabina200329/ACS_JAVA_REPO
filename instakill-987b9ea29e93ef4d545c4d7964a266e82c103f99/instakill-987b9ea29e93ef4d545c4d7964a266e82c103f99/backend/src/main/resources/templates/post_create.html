@@ -4,47 +4,72 @@
 <div th:replace="~{layout :: layout('Create Post', ~{::section})}">
     <section>
         <h1>Create a post</h1>
-        <form th:action="@{/posts}" th:object="${postForm}" method="post" class="form">
+        <form th:action="@{/posts}" th:object="${postForm}" method="post" class="form" id="postForm">
             <input type="hidden" th:if="${_csrf != null}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
             <label>Content
                 <textarea th:field="*{content}" rows="4"></textarea>
             </label>
             <div class="error" th:if="${#fields.hasErrors('content')}" th:errors="*{content}"></div>
-            <label>Alege o poză sau un video:
-                <input type="file" id="mediaFileInput" accept="image/*,video/*" />
+
+            <label>Upload a photo or video
+                <input type="file" id="mediaFileInput" accept="image/*,video/mp4,video/quicktime,video/webm"/>
             </label>
-            <!-- Câmpul original este acum ascuns și va prelua automat link-ul de la server -->
-            <input type="hidden" id="imageUrlInput" th:field="*{imageUrl}" />
+            <small id="uploadStatus"></small>
+
+            <label>…or paste an image/video URL
+                <input type="text" id="imageUrlInput" th:field="*{imageUrl}" placeholder="https://..."/>
+            </label>
+            <div class="error" th:if="${#fields.hasErrors('imageUrl')}" th:errors="*{imageUrl}"></div>
+
+            <button type="submit" id="publishButton">Publish</button>
         </form>
-    </section>
-    <script>
-        document.querySelector('.form').addEventListener('submit', async function(e) {
-            e.preventDefault(); // Oprim trimiterea temporar
 
-            const fileInput = document.getElementById('mediaFileInput');
-            const imageUrlInput = document.getElementById('imageUrlInput');
-            const file = fileInput.files[0];
+        <script>
+            (function () {
+                const form = document.getElementById('postForm');
+                const fileInput = document.getElementById('mediaFileInput');
+                const urlInput = document.getElementById('imageUrlInput');
+                const status = document.getElementById('uploadStatus');
+                const publish = document.getElementById('publishButton');
 
-            if (file) {
-                const formData = new FormData();
-                formData.append("file", file);
+                form.addEventListener('submit', async function (e) {
+                    const file = fileInput.files[0];
+                    if (!file) {
+                        return; // fără fișier: se trimite formularul normal (cu URL-ul lipit, dacă există)
+                    }
+                    e.preventDefault();
+                    publish.disabled = true;
+                    status.textContent = 'Uploading ' + file.name + '...';
 
-                // Trimitem fișierul către MediaController-ul tău
-                const response = await fetch('/api/media', {
-                    method: 'POST',
-                    body: formData
+                    try {
+                        const formData = new FormData();
+                        formData.append('file', file);
+                        const response = await fetch('/api/media', {
+                            method: 'POST',
+                            body: formData,
+                            credentials: 'same-origin'
+                        });
+                        if (!response.ok) {
+                            let message = 'Upload failed (' + response.status + ')';
+                            try {
+                                const problem = await response.json();
+                                if (problem.detail) message = problem.detail;
+                            } catch (ignored) { }
+                            throw new Error(message);
+                        }
+                        const result = await response.json();
+                        urlInput.value = result.mediaUrl;
+                        fileInput.value = '';
+                        form.submit();
+                    } catch (err) {
+                        status.textContent = err.message;
+                        status.className = 'error';
+                        publish.disabled = false;
+                    }
                 });
-
-                if (response.ok) {
-                    const result = await response.json();
-                    imageUrlInput.value = result.mediaUrl; // Salvăm link-ul returnat
-                }
-            }
-
-            // Trimitem postarea completă mai departe
-            this.submit();
-        });
-    </script>
+            })();
+        </script>
+    </section>
 </div>
 </body>
 </html>

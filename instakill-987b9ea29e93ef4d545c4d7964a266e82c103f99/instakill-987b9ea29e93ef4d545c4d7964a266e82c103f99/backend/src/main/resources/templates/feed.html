@@ -22,7 +22,8 @@
                 </div>
             </div>
             <p th:text="${post.content()}"></p>
-            <img th:if="${post.imageUrl()}" th:src="${post.imageUrl()}" alt="Post image"/>
+            <video th:if="${post.imageUrl() != null and post.video()}" th:src="${post.imageUrl()}" controls preload="metadata"></video>
+            <img th:if="${post.imageUrl() != null and !post.video()}" th:src="${post.imageUrl()}" alt="Post image"/>
             <div class="post-actions">
                 <form th:action="@{'/posts/' + ${post.id()} + '/likes'}" method="post">
                     <input type="hidden" th:if="${_csrf != null}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>

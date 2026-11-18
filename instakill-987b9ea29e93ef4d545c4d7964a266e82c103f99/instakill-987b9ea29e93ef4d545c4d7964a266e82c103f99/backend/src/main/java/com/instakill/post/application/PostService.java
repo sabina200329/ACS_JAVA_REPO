@@ -6,6 +6,7 @@ import com.instakill.common.error.NotFoundException;
 import com.instakill.common.id.IdGenerator;
 import com.instakill.feed.application.FeedService;
 import com.instakill.feed.domain.FeedSort;
+import com.instakill.notification.NotificationService;
 import com.instakill.post.domain.Post;
 import com.instakill.post.domain.PostRepository;
 import org.springframework.stereotype.Service;
@@ -23,12 +24,14 @@ public class PostService {
     private final IdGenerator idGenerator;
     private final Clock clock;
     private final FeedService feedService;
+    private final NotificationService notificationService;
 
-    public PostService(PostRepository posts, IdGenerator idGenerator, Clock clock, FeedService feedService) {
+    public PostService(PostRepository posts, IdGenerator idGenerator, Clock clock, FeedService feedService, NotificationService notificationService) {
         this.posts = posts;
         this.idGenerator = idGenerator;
         this.clock = clock;
         this.feedService = feedService;
+        this.notificationService = notificationService;
     }
 
     @Transactional
@@ -44,7 +47,14 @@ public class PostService {
                 0L,
                 0L
         );
-        return posts.save(post);
+
+        // Mai întâi salvăm postarea în baza de date
+        Post savedPost = posts.save(post);
+
+        // Apoi declanșăm notificarea asincronă în fundal
+        notificationService.sendPostCreated(savedPost);
+
+        return savedPost;
     }
 
     public Post getPost(UUID id) {

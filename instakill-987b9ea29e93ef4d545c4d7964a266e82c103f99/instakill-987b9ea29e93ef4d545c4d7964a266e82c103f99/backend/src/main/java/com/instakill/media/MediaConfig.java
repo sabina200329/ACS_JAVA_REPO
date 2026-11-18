@@ -1,4 +1,4 @@
-package com.instakill;
+package com.instakill.media;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
