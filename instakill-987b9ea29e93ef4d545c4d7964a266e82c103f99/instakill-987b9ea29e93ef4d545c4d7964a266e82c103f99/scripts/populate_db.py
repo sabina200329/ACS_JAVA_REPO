@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Populează baza de date SQLite a Instakill cu date de test (Lab 5, partea 2).
+Populează baza de date a Instakill cu date de test.
+Lab 5, partea 2 (SQLite) + Lab 6 (PostgreSQL).
 
 Ce face:
   1. Șterge toate comentariile, like-urile și postările, plus toți utilizatorii
@@ -15,12 +16,17 @@ existente, un utilizator dă cel mult un like pe o postare, iar contoarele
 posts.like_count / posts.comment_count corespund rândurilor inserate.
 
 Performanță: totul rulează într-o singură tranzacție, cu inserări în loturi
-(executemany), nu rând cu rând.
+(executemany / execute_values), nu rând cu rând.
 
-Instalare:   pip install faker bcrypt
-Rulare:      python populate_db.py --db ../instakill.db
-             python populate_db.py --db ../instakill.db --users 500 --seed 42
+Instalare:   pip install -r requirements.txt     (faker, bcrypt, psycopg2-binary)
 
+Rulare SQLite:
+    python populate_db.py --db ../instakill.db
+    python populate_db.py --db ../instakill.db --users 500 --seed 42
+Rulare PostgreSQL:
+    python populate_db.py --pg postgresql://instakill:instakill_password@localhost:5432/instakill
+
+Schema (tabelele) e creată de aplicație: pornește aplicația o dată înainte.
 Oprește aplicația Spring înainte de rulare, ca baza de date să nu fie blocată.
 """
 
@@ -32,7 +38,7 @@ import sqlite3
 import sys
 import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 # Diacriticele se afișează corect și în consola Windows
@@ -56,9 +62,12 @@ VIDEO_URLS = (
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Populează instakill.db cu date de test.")
-    parser.add_argument("--db", default="instakill.db",
+    parser = argparse.ArgumentParser(description="Populează baza de date Instakill cu date de test.")
+    target = parser.add_mutually_exclusive_group()
+    target.add_argument("--db", default="instakill.db",
                         help="calea către fișierul SQLite (implicit: ./instakill.db)")
+    target.add_argument("--pg", metavar="URL",
+                        help="URL PostgreSQL, ex. postgresql://user:parola@localhost:5432/instakill")
     parser.add_argument("--users", type=int, default=10_000,
                         help="câți utilizatori noi să genereze (implicit: 10000)")
     parser.add_argument("--min-posts", type=int, default=10, help="minim postări per utilizator (10)")
@@ -77,9 +86,89 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
-def to_millis(dt: datetime) -> int:
-    """Aplicația (Hibernate + SQLite) stochează Instant ca epoch în milisecunde."""
-    return int(dt.timestamp() * 1000)
+class Database:
+    """Ascunde diferențele dintre SQLite și PostgreSQL (conexiune, parametri, timestamp-uri)."""
+
+    def __init__(self, args: argparse.Namespace):
+        if args.pg:
+            try:
+                import psycopg2
+                import psycopg2.extras
+            except ImportError:
+                sys.exit("Lipsește driverul PostgreSQL. Rulează: pip install psycopg2-binary")
+            self.kind = "postgres"
+            self.conn = psycopg2.connect(args.pg)
+            self.conn.autocommit = False  # o singură tranzacție, confirmată la final
+            self._execute_values = psycopg2.extras.execute_values
+            self.label = "PostgreSQL"
+        else:
+            path = Path(args.db)
+            if not path.exists():
+                sys.exit(f"Nu găsesc baza de date: {path.resolve()}. Pornește o dată aplicația sau dă --db.")
+            self.kind = "sqlite"
+            self.conn = sqlite3.connect(path, isolation_level=None)  # tranzacția o gestionăm manual
+            self.conn.execute("PRAGMA foreign_keys = ON")
+            self.label = f"SQLite ({path})"
+
+    # --- tranzacție ---
+    def begin(self) -> None:
+        if self.kind == "sqlite":
+            self.conn.execute("BEGIN")
+
+    def commit(self) -> None:
+        if self.kind == "sqlite":
+            self.conn.execute("COMMIT")
+        else:
+            self.conn.commit()
+
+    def rollback(self) -> None:
+        if self.kind == "sqlite":
+            self.conn.execute("ROLLBACK")
+        else:
+            self.conn.rollback()
+
+    def close(self) -> None:
+        self.conn.close()
+
+    # --- interogări ---
+    def _sql(self, sql: str) -> str:
+        return sql if self.kind == "sqlite" else sql.replace("?", "%s")
+
+    def execute(self, sql: str, params: tuple = ()) -> None:
+        if self.kind == "sqlite":
+            self.conn.execute(sql, params)
+        else:
+            with self.conn.cursor() as cur:
+                cur.execute(self._sql(sql), params)
+
+    def fetchall(self, sql: str, params: tuple = ()) -> list[tuple]:
+        if self.kind == "sqlite":
+            return self.conn.execute(sql, params).fetchall()
+        with self.conn.cursor() as cur:
+            cur.execute(self._sql(sql), params)
+            return cur.fetchall()
+
+    def insert_many(self, table: str, columns: tuple[str, ...], rows: list[tuple]) -> None:
+        cols = ", ".join(columns)
+        if self.kind == "sqlite":
+            marks = ", ".join("?" for _ in columns)
+            self.conn.executemany(f"INSERT INTO {table} ({cols}) VALUES ({marks})", rows)
+        else:
+            with self.conn.cursor() as cur:
+                self._execute_values(cur, f"INSERT INTO {table} ({cols}) VALUES %s", rows, page_size=len(rows))
+
+    def ts(self, dt: datetime):
+        """SQLite (Hibernate) stochează Instant ca epoch în ms; PostgreSQL are timestamp with time zone."""
+        if self.kind == "sqlite":
+            return int(dt.timestamp() * 1000)
+        return dt
+
+    def table_names(self) -> set[str]:
+        if self.kind == "sqlite":
+            rows = self.fetchall("SELECT name FROM sqlite_master WHERE type = 'table'")
+        else:
+            rows = self.fetchall("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
+        return {row[0] for row in rows}
 
 
 def bcrypt_hash(password: str) -> str:
@@ -89,11 +178,12 @@ def bcrypt_hash(password: str) -> str:
 
 
 class BatchWriter:
-    """Adună rânduri și le inserează cu executemany când lotul e plin."""
+    """Adună rânduri și le inserează în lot când lotul e plin."""
 
-    def __init__(self, conn: sqlite3.Connection, sql: str, batch_size: int):
-        self.conn = conn
-        self.sql = sql
+    def __init__(self, db: Database, table: str, columns: tuple[str, ...], batch_size: int):
+        self.db = db
+        self.table = table
+        self.columns = columns
         self.batch_size = batch_size
         self.rows: list[tuple] = []
         self.total = 0
@@ -105,24 +195,23 @@ class BatchWriter:
 
     def flush(self) -> None:
         if self.rows:
-            self.conn.executemany(self.sql, self.rows)
+            self.db.insert_many(self.table, self.columns, self.rows)
             self.total += len(self.rows)
             self.rows.clear()
 
 
-def check_schema(conn: sqlite3.Connection) -> None:
-    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
-    missing = {"users", "posts", "likes", "comments"} - tables
+def check_schema(db: Database) -> None:
+    missing = {"users", "posts", "likes", "comments"} - db.table_names()
     if missing:
         sys.exit(f"Tabele lipsă: {sorted(missing)}. Pornește o dată aplicația ca să creeze schema.")
 
 
-def clear_data(conn: sqlite3.Connection) -> None:
-    conn.execute("DELETE FROM comments")
-    conn.execute("DELETE FROM likes")
-    conn.execute("DELETE FROM posts")
+def clear_data(db: Database) -> None:
+    db.execute("DELETE FROM comments")
+    db.execute("DELETE FROM likes")
+    db.execute("DELETE FROM posts")
     placeholders = ",".join("?" for _ in KEEP_USERS)
-    conn.execute(f"DELETE FROM users WHERE username NOT IN ({placeholders})", KEEP_USERS)
+    db.execute(f"DELETE FROM users WHERE username NOT IN ({placeholders})", KEEP_USERS)
 
 
 def unique_username(fake: Faker, taken: set[str]) -> str:
@@ -134,21 +223,18 @@ def unique_username(fake: Faker, taken: set[str]) -> str:
     return name
 
 
-def create_users(conn, fake: Faker, count: int, now: datetime, batch_size: int) -> list[str]:
+def create_users(db: Database, fake: Faker, count: int, now: datetime, batch_size: int) -> list[str]:
     """Returnează lista cu ID-urile tuturor utilizatorilor (vechi + noi)."""
-    existing = conn.execute("SELECT id, username FROM users").fetchall()
-    user_ids = [row[0] for row in existing]
+    existing = db.fetchall("SELECT id, username FROM users")
+    user_ids = [row[0].strip() for row in existing]
     taken = {row[1] for row in existing}
 
-    writer = BatchWriter(conn,
-                         "INSERT INTO users (id, created_at, email, password_hash, username) "
-                         "VALUES (?, ?, ?, ?, ?)",
-                         batch_size)
+    writer = BatchWriter(db, "users", ("id", "created_at", "email", "password_hash", "username"), batch_size)
 
     # charlie / password, cu hash bcrypt propriu
     charlie_id = str(uuid.uuid4())
     taken.add("charlie")
-    writer.add((charlie_id, to_millis(now - timedelta(days=30)), "charlie@example.com",
+    writer.add((charlie_id, db.ts(now - timedelta(days=30)), "charlie@example.com",
                 bcrypt_hash(DEFAULT_PASSWORD), "charlie"))
     user_ids.append(charlie_id)
 
@@ -157,39 +243,38 @@ def create_users(conn, fake: Faker, count: int, now: datetime, batch_size: int) 
     for _ in range(count):
         user_id = str(uuid.uuid4())
         username = unique_username(fake, taken)
-        created = fake.date_time_between(start_date="-90d", end_date="-8d")
-        writer.add((user_id, to_millis(created), f"{username}@example.com", shared_hash, username))
+        created = fake.date_time_between(start_date="-90d", end_date="-8d", tzinfo=timezone.utc)
+        writer.add((user_id, db.ts(created), f"{username}@example.com", shared_hash, username))
         user_ids.append(user_id)
 
     writer.flush()
     return user_ids
 
 
-def create_content(conn, fake: Faker, user_ids: list[str], args, now: datetime) -> dict[str, int]:
+def create_content(db: Database, fake: Faker, user_ids: list[str], args, now: datetime) -> dict[str, int]:
     week_ago = now - timedelta(days=args.days)
-    now_ms = to_millis(now)
+    now_s = now.timestamp()
+
+    def at(seconds: float):
+        return db.ts(datetime.fromtimestamp(seconds, tz=timezone.utc))
 
     # Texte generate cu faker, dintr-un set prealocat (mult mai rapid decât un apel per rând)
     post_texts = [" ".join(fake.words(nb=random.randint(1, 10))).capitalize() for _ in range(5_000)]
     comment_texts = [fake.sentence(nb_words=random.randint(2, 12))[:500] for _ in range(5_000)]
 
-    posts = BatchWriter(conn,
-                        "INSERT INTO posts (id, author_id, comment_count, content, created_at, image_url, "
-                        "like_count, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                        args.batch_size)
-    comments = BatchWriter(conn,
-                           "INSERT INTO comments (id, author_id, content, created_at, post_id) "
-                           "VALUES (?, ?, ?, ?, ?)",
+    posts = BatchWriter(db, "posts", ("id", "author_id", "comment_count", "content", "created_at",
+                                      "image_url", "like_count", "updated_at"), args.batch_size)
+    comments = BatchWriter(db, "comments", ("id", "author_id", "content", "created_at", "post_id"),
                            args.batch_size)
-    likes = BatchWriter(conn,
-                        "INSERT INTO likes (id, created_at, post_id, user_id) VALUES (?, ?, ?, ?)",
-                        args.batch_size)
+    likes = BatchWriter(db, "likes", ("id", "created_at", "post_id", "user_id"), args.batch_size)
 
     max_likes = min(args.max_likes, len(user_ids))
     for index, author_id in enumerate(user_ids, start=1):
         for _ in range(random.randint(args.min_posts, args.max_posts)):
             post_id = str(uuid.uuid4())
-            created_ms = to_millis(fake.date_time_between_dates(datetime_start=week_ago, datetime_end=now))
+            created = fake.date_time_between_dates(datetime_start=week_ago, datetime_end=now,
+                                                   tzinfo=timezone.utc)
+            created_s = created.timestamp()
 
             if random.random() < 0.5:
                 image_url = PHOTO_URL.format(seed=post_id[:8])
@@ -199,26 +284,27 @@ def create_content(conn, fake: Faker, user_ids: list[str], args, now: datetime) 
             comment_count = random.randint(0, args.max_comments)
             for _ in range(comment_count):
                 comments.add((str(uuid.uuid4()), random.choice(user_ids), random.choice(comment_texts),
-                              random.randint(created_ms, now_ms), post_id))
+                              at(random.uniform(created_s, now_s)), post_id))
 
             like_count = random.randint(0, max_likes)
             # random.sample => utilizatori distincți, deci fără like-uri duplicate
             for liker_id in random.sample(user_ids, like_count):
-                likes.add((str(uuid.uuid4()), random.randint(created_ms, now_ms), post_id, liker_id))
+                likes.add((str(uuid.uuid4()), at(random.uniform(created_s, now_s)), post_id, liker_id))
 
-            updated_ms = created_ms if comment_count == 0 and like_count == 0 else now_ms
-            posts.add((post_id, author_id, comment_count, random.choice(post_texts), created_ms,
-                       image_url, like_count, updated_ms))
+            updated = created_s if comment_count == 0 and like_count == 0 else now_s
+            posts.add((post_id, author_id, comment_count, random.choice(post_texts), at(created_s),
+                       image_url, like_count, at(updated)))
 
         if index % 1_000 == 0:
             print(f"  ... {index}/{len(user_ids)} utilizatori procesați")
 
+    # ordinea contează în PostgreSQL dacă există chei străine: întâi postările
     for writer in (posts, comments, likes):
         writer.flush()
     return {"posts": posts.total, "comments": comments.total, "likes": likes.total}
 
 
-def verify_integrity(conn: sqlite3.Connection) -> None:
+def verify_integrity(db: Database) -> None:
     checks = {
         "postări fără autor": "SELECT COUNT(*) FROM posts p LEFT JOIN users u ON u.id = p.author_id "
                               "WHERE u.id IS NULL",
@@ -227,47 +313,43 @@ def verify_integrity(conn: sqlite3.Connection) -> None:
         "like-uri orfane": "SELECT COUNT(*) FROM likes l LEFT JOIN posts p ON p.id = l.post_id "
                            "LEFT JOIN users u ON u.id = l.user_id WHERE p.id IS NULL OR u.id IS NULL",
         "like-uri duplicate": "SELECT COUNT(*) FROM (SELECT 1 FROM likes GROUP BY post_id, user_id "
-                              "HAVING COUNT(*) > 1)",
+                              "HAVING COUNT(*) > 1) d",
     }
     for label, sql in checks.items():
-        bad = conn.execute(sql).fetchone()[0]
+        bad = db.fetchall(sql)[0][0]
         if bad:
             raise RuntimeError(f"Verificare eșuată: {bad} {label}")
 
 
 def main() -> None:
     args = parse_args()
-    db_path = Path(args.db)
-    if not db_path.exists():
-        sys.exit(f"Nu găsesc baza de date: {db_path.resolve()}. Pornește o dată aplicația sau dă --db.")
-
     if args.seed is not None:
         random.seed(args.seed)
         Faker.seed(args.seed)
     fake = Faker()
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
 
+    db = Database(args)
+    print(f"Baza de date: {db.label}")
     started = time.perf_counter()
-    conn = sqlite3.connect(db_path, isolation_level=None)  # tranzacția o gestionăm manual
     try:
-        check_schema(conn)
-        conn.execute("PRAGMA foreign_keys = ON")
-        conn.execute("BEGIN")
+        check_schema(db)
+        db.begin()
         try:
             print("Șterg datele vechi (păstrez alice și bob)...")
-            clear_data(conn)
+            clear_data(db)
 
             print(f"Creez charlie + {args.users} utilizatori...")
-            user_ids = create_users(conn, fake, args.users, now, args.batch_size)
+            user_ids = create_users(db, fake, args.users, now, args.batch_size)
 
             print(f"Creez postări, comentarii și like-uri pentru {len(user_ids)} utilizatori...")
-            totals = create_content(conn, fake, user_ids, args, now)
+            totals = create_content(db, fake, user_ids, args, now)
 
             print("Verific integritatea datelor...")
-            verify_integrity(conn)
-            conn.execute("COMMIT")
+            verify_integrity(db)
+            db.commit()
         except BaseException:
-            conn.execute("ROLLBACK")
+            db.rollback()
             print("Eroare — toate modificările au fost anulate (ROLLBACK).")
             raise
 
@@ -276,7 +358,7 @@ def main() -> None:
               f"{totals['comments']} comentarii, {totals['likes']} like-uri.")
         print("Login de test: charlie / password")
     finally:
-        conn.close()
+        db.close()
 
 
 if __name__ == "__main__":

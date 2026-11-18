@@ -1,0 +1,2 @@
+Method,Name,Error,Occurrences,First Seen,Last Seen
+POST,/api/posts/:id/likes/toggle,HTTPError('500 Server Error:  for url: /api/posts/:id/likes/toggle'),6,2026-11-18T15:32:22Z,2026-11-18T15:33:04Z

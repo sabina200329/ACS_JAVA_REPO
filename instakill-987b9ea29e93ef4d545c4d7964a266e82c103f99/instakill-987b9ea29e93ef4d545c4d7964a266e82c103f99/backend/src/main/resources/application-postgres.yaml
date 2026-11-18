@@ -1,0 +1,13 @@
+# Profil pentru PostgreSQL (Lab 6). Implicit aplicația folosește SQLite.
+# Pornire:  ./gradlew bootRun --args='--spring.profiles.active=postgres'
+# Valorile se pot suprascrie cu variabile de mediu: POSTGRES_URL, POSTGRES_USER, POSTGRES_PASSWORD
+spring:
+  datasource:
+    url: ${POSTGRES_URL:jdbc:postgresql://localhost:5432/instakill}
+    driver-class-name: org.postgresql.Driver
+    username: ${POSTGRES_USER:instakill}
+    password: ${POSTGRES_PASSWORD:instakill_password}
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update
