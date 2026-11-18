@@ -1,0 +1,5 @@
+# date locale generate la rulare (nu se pun în git)
+*.db
+media/
+media_backup/
+__pycache__/

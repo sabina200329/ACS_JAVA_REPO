@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+<div th:replace="~{layout :: layout('Analytics', ~{::section})}">
+    <section class="analytics">
+        <h1>My analytics</h1>
+
+        <div class="card">
+            <h2>Rank by average engagement</h2>
+            <p th:if="${stats.engagementRank() == null}">You have no posts yet.</p>
+            <div th:if="${stats.engagementRank() != null}" class="stat-row">
+                <div class="stat">
+                    <strong th:text="'Top ' + ${#numbers.formatDecimal(stats.engagementRank().topPercent(), 1, 2)} + '%'">Top 5%</strong>
+                    <small>of users</small>
+                </div>
+                <div class="stat">
+                    <strong th:text="'#' + ${stats.engagementRank().rank()} + ' / ' + ${stats.engagementRank().totalUsers()}">#1 / 10</strong>
+                    <small>rank</small>
+                </div>
+                <div class="stat">
+                    <strong th:text="${#numbers.formatDecimal(stats.engagementRank().averageEngagement(), 1, 2)}">3.5</strong>
+                    <small>avg engagement / post</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Like-to-comment ratio</h2>
+            <div class="stat-row">
+                <div class="stat">
+                    <strong th:text="${stats.likeCommentRatio().ratio() != null} ? ${#numbers.formatDecimal(stats.likeCommentRatio().ratio(), 1, 2)} : '—'">2.0</strong>
+                    <small>likes per comment</small>
+                </div>
+                <div class="stat">
+                    <strong th:text="${stats.likeCommentRatio().likes()}">0</strong>
+                    <small>total likes</small>
+                </div>
+                <div class="stat">
+                    <strong th:text="${stats.likeCommentRatio().comments()}">0</strong>
+                    <small>total comments</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Per week</h2>
+            <table class="stats-table">
+                <thead><tr><th>Week of</th><th>Posts</th><th>Likes</th><th>Comments</th></tr></thead>
+                <tbody>
+                <tr th:each="w : ${stats.weekly()}">
+                    <td th:text="${w.weekStart()}"></td>
+                    <td th:text="${w.posts()}"></td>
+                    <td th:text="${w.likes()}"></td>
+                    <td th:text="${w.comments()}"></td>
+                </tr>
+                <tr th:if="${stats.weekly().isEmpty()}"><td colspan="4">No data</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>Top 5 posts by engagement</h2>
+            <table class="stats-table">
+                <thead><tr><th>Post</th><th>Likes</th><th>Comments</th><th>Engagement</th></tr></thead>
+                <tbody>
+                <tr th:each="p : ${stats.topPosts()}">
+                    <td><a th:href="@{'/posts/' + ${p.id()}}" th:text="${#strings.abbreviate(p.content(), 60)}"></a></td>
+                    <td th:text="${p.likes()}"></td>
+                    <td th:text="${p.comments()}"></td>
+                    <td th:text="${p.engagement()}"></td>
+                </tr>
+                <tr th:if="${stats.topPosts().isEmpty()}"><td colspan="4">No data</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>Average likes per post by media type</h2>
+            <table class="stats-table">
+                <thead><tr><th>Media type</th><th>Posts</th><th>Avg likes</th></tr></thead>
+                <tbody>
+                <tr th:each="m : ${stats.byMediaType()}">
+                    <td th:text="${m.mediaType()}"></td>
+                    <td th:text="${m.posts()}"></td>
+                    <td th:text="${#numbers.formatDecimal(m.averageLikes(), 1, 2)}"></td>
+                </tr>
+                <tr th:if="${stats.byMediaType().isEmpty()}"><td colspan="3">No data</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+</body>
+</html>

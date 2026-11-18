@@ -4,6 +4,7 @@
       <h1>Instakill</h1>
       <nav v-if="user">
         <span class="user">@{{ user.username }}</span>
+        <button @click="toggleAnalytics">{{ view === 'analytics' ? 'Feed' : 'Analytics' }}</button>
         <button @click="logout">Logout</button>
       </nav>
     </header>
@@ -22,6 +23,66 @@
           <p v-if="error" class="error">{{ error }}</p>
           <button type="submit">Continue</button>
         </form>
+      </section>
+
+      <section v-else-if="view === 'analytics'" class="analytics">
+        <p v-if="!analytics">Loading analytics...</p>
+        <template v-else>
+          <div class="card">
+            <h2>Rank by average engagement</h2>
+            <p v-if="!analytics.engagementRank">You have no posts yet.</p>
+            <p v-else>
+              <strong>Top {{ analytics.engagementRank.topPercent.toFixed(2) }}%</strong>
+              of users (#{{ analytics.engagementRank.rank }} / {{ analytics.engagementRank.totalUsers }}),
+              average engagement {{ analytics.engagementRank.averageEngagement.toFixed(2) }} per post
+            </p>
+          </div>
+
+          <div class="card">
+            <h2>Like-to-comment ratio</h2>
+            <p>
+              <strong>{{ analytics.likeCommentRatio.ratio != null ? analytics.likeCommentRatio.ratio.toFixed(2) : '—' }}</strong>
+              likes per comment ({{ analytics.likeCommentRatio.likes }} likes, {{ analytics.likeCommentRatio.comments }} comments)
+            </p>
+          </div>
+
+          <div class="card">
+            <h2>Per week</h2>
+            <table class="stats-table">
+              <thead><tr><th>Week of</th><th>Posts</th><th>Likes</th><th>Comments</th></tr></thead>
+              <tbody>
+                <tr v-for="w in analytics.weekly" :key="w.weekStart">
+                  <td>{{ w.weekStart }}</td><td>{{ w.posts }}</td><td>{{ w.likes }}</td><td>{{ w.comments }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="card">
+            <h2>Top 5 posts by engagement</h2>
+            <table class="stats-table">
+              <thead><tr><th>Post</th><th>Likes</th><th>Comments</th><th>Engagement</th></tr></thead>
+              <tbody>
+                <tr v-for="p in analytics.topPosts" :key="p.id">
+                  <td>{{ p.content.length > 60 ? p.content.slice(0, 57) + '...' : p.content }}</td>
+                  <td>{{ p.likes }}</td><td>{{ p.comments }}</td><td>{{ p.engagement }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="card">
+            <h2>Average likes per post by media type</h2>
+            <table class="stats-table">
+              <thead><tr><th>Media type</th><th>Posts</th><th>Avg likes</th></tr></thead>
+              <tbody>
+                <tr v-for="m in analytics.byMediaType" :key="m.mediaType">
+                  <td>{{ m.mediaType }}</td><td>{{ m.posts }}</td><td>{{ m.averageLikes.toFixed(2) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </template>
       </section>
 
       <section v-else class="feed">
@@ -95,7 +156,7 @@
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
-import { createPost, fetchMe, listFeed, login, register as registerUser, toggleLike, listComments, addComment, uploadMedia } from './api'
+import { createPost, fetchMe, listFeed, login, register as registerUser, toggleLike, listComments, addComment, uploadMedia, fetchMyAnalytics } from './api'
 
 const user = ref(null)
 const posts = ref([])
@@ -107,6 +168,8 @@ const composer = reactive({ content: '', imageUrl: '' })
 const uploading = ref(false)
 const uploadStatus = ref('')
 const fileInput = ref(null)
+const view = ref('feed')
+const analytics = ref(null)
 
 // Comments state
 const comments = reactive({})
@@ -212,6 +275,16 @@ async function incarcaFisier(event) {
   } finally {
     uploading.value = false
   }
+}
+
+async function toggleAnalytics() {
+  if (view.value === 'analytics') {
+    view.value = 'feed'
+    return
+  }
+  view.value = 'analytics'
+  analytics.value = null
+  analytics.value = await fetchMyAnalytics()
 }
 
 function isVideo(url) {
