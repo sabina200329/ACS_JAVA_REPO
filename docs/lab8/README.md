@@ -85,16 +85,41 @@ npm install
 npm run dev
 ```
 
-Se deschide http://localhost:5173, login cu `alice` / `password`.
+Alternativ, IP-ul se pune în `frontend/.env.local` (ignorat de git):
+
+```
+BACKEND_URL=http://172.19.97.152:8080
+```
+
+La pornire Vite afișează `[vite] backend API -> http://172.19.97.152:8080`. Se deschide http://localhost:5173, login cu `alice` / `password`.
+
+## Mediul folosit
+
+| | |
+|---|---|
+| Windows 11 Pro + WSL 2 | Ubuntu 26.04.1 LTS |
+| Java | OpenJDK 21.0.13 (`apt install openjdk-21-jdk`) |
+| Git | 2.53.0 |
+| PostgreSQL | 18.6 |
+| IP WSL | 172.19.97.152 (`wsl hostname -I`) |
 
 ## Dovezi
 
-| Build reușit în Linux | Backend pornit |
+| Build reușit în Linux (`./gradlew build`) | Backend pornit (`./gradlew bootRun`) |
 |---|---|
 | ![](1_build.png) | ![](2_bootrun.png) |
-| **Frontend pe Windows conectat la WSL** | **Health check** |
-| ![](3_frontend.png) | ![](4_health.png) |
+
+**Frontend pe Windows (Vite, `localhost:5173`) conectat la backend-ul din WSL** – login cu `alice`, feed-ul vine din PostgreSQL-ul din WSL, iar postarea nouă a fost creată din Windows:
+
+![](3_frontend.jpg)
+
+- [`4_health.txt`](4_health.txt) – `GET /api/health` → `{"status":"UP"}` atât direct pe IP-ul WSL, cât și prin proxy-ul Vite.
+- [`5_post_in_wsl_postgres.txt`](5_post_in_wsl_postgres.txt) – postarea făcută din frontend-ul de pe Windows, citită cu `psql` din baza `instakill` din WSL.
 
 ## Reflecție
 
-_(de completat după rulare)_
+Am lucrat aproape tot timpul în terminalul Ubuntu din WSL. Comenzile Linux folosite: `sudo apt update` / `apt upgrade` / `apt install` pentru pachete, `git --version` și `java -version` pentru verificare, `sudo service postgresql start` / `status`, `sudo -u postgres psql` și `psql -h localhost -U instakill -d instakill` pentru baza de date, `cd`, `ls -al`, `chmod +x` pentru navigare și permisiuni, `git clone`, `./scripts/bootstrap-gradle.sh`, `./gradlew build` și `./gradlew bootRun`, iar `hostname -I` pentru IP-ul mașinii Linux.
+
+Prima problemă a fost că aplicația Ubuntu era instalată, dar WSL nu era activat în Windows („virtualization is not enabled”); după `wsl --install` a fost nevoie de un restart. Instalarea părea blocată, dar de fapt se oprise pentru că dădusem click în fereastra PowerShell (modul „Select” pune procesul pe pauză) – s-a rezolvat cu Esc.
+
+Proiectul era configurat pentru Java 23, iar Ubuntu oferă în apt doar OpenJDK 21, așa că am schimbat `languageVersion` la 21; codul nu folosea nimic din Java 22+, deci a compilat direct. Scriptul `bootstrap-gradle.sh` nu avea drept de execuție în git, așa că l-am marcat executabil. Pentru conectarea frontend-ului, adresa backend-ului era scrisă fix în `vite.config.js`; am făcut-o configurabilă prin `BACKEND_URL`, pentru că IP-ul WSL se schimbă la fiecare repornire. În final frontend-ul de pe Windows a comunicat fără probleme cu backend-ul din Linux, iar datele s-au salvat în PostgreSQL-ul din WSL.

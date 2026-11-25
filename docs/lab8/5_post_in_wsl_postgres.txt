@@ -1,0 +1,7 @@
+$ psql -h localhost -U instakill -d instakill   (în WSL)
+ username |                                     content                                      |          created_at           
+----------+----------------------------------------------------------------------------------+-------------------------------
+ alice    | Frontend on Windows -> backend in WSL at 172.19.97.152:8080 ✅                   | 2026-11-25 20:33:01.841863+02
+ alice    | Hello from the Windows frontend, served by the backend running in Linux (WSL) 🐧 | 2026-11-25 20:30:26.932219+02
+(2 rows)
+

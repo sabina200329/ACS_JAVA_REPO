@@ -1,0 +1,11 @@
+frontend/.env.local:
+BACKEND_URL=http://172.19.97.152:8080
+
+npm run dev  ->
+[vite] backend API -> http://172.19.97.152:8080
+
+GET http://172.19.97.152:8080/api/health   (din Windows, direct pe IP-ul WSL)
+{"status":"UP"}
+
+GET http://localhost:5173/api/health   (prin proxy-ul Vite -> 172.19.97.152:8080)
+{"status":"UP"}
